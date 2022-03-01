@@ -1,0 +1,5 @@
+-- Union county geometries
+-- Dump to lines
+-- Buffer lines
+-- Erase from unioned polygon
+-- Return either coastal buffer -or- reduced polygon, depending on use case.
