@@ -65,3 +65,74 @@ FROM nsi_with_expected_damages_unweighted
 GROUP BY 1,2
 ORDER BY 1,2
 ;
+
+-- AEB by containment in sites
+-- DROP TABLE IF EXISTS site_contained_sample_slr0;
+-- CREATE TABLE site_contained_sample_slr0 AS
+SELECT 
+		slr,
+		geom,
+		power_integral_aed(return_period, expected_loss_restored, 1, 100) as aed_restored,
+		power_integral_aed(return_period, expected_loss_existing, 1, 100) as aed_existing,
+		(power_integral_aed(return_period, expected_loss_existing, 1, 100) - 
+			power_integral_aed(return_period, expected_loss_restored, 1, 100)) as aeb,
+		(SUM(power_integral_aed(return_period, expected_loss_existing, 1, 100) - 
+			power_integral_aed(return_period, expected_loss_restored, 1, 100)) OVER (PARTITION BY slr)) as total_aeb
+FROM
+(
+	SELECT 
+		slr, 
+		geom,
+		array_agg(return_period order by return_period asc) as return_period, 
+		array_agg(expected_loss_restored order by return_period asc) as expected_loss_restored,
+		array_agg(expected_loss_existing order by return_period asc) as expected_loss_existing,
+		count(*) as cnt,
+		count(*) over () as total_cnt
+	FROM
+	(
+		SELECT 
+			slr, 
+			return_period, 
+			geom,
+			SUM(expected_loss_restored)::numeric as expected_loss_restored,
+			SUM(expected_loss_existing)::numeric as expected_loss_existing,
+			SUM(expected_benefit)::numeric as expected_benefit,
+			count(*)
+		FROM nsi_with_expected_damages_unweighted nsi
+		WHERE EXISTS (SELECT 1 FROM all_sites WHERE ST_Contains(all_sites.geom,  nsi.geom) LIMIT 1)
+		GROUP BY 1,2,3
+		ORDER BY 1,2,3
+	)q
+	GROUP BY 1,2
+)q
+WHERE cnt = 3 and slr = 0
+
+
+-- Total AEB by SLR
+SELECT 
+	slr,
+	power_integral_aed(return_period, expected_loss_restored, 1, 100)::numeric::money as aed_restored,
+	power_integral_aed(return_period, expected_loss_existing, 1, 100)::numeric::money as aed_existing,
+	(power_integral_aed(return_period, expected_loss_existing, 1, 100) - 
+		power_integral_aed(return_period, expected_loss_restored, 1, 100))::numeric::money as aeb
+FROM
+(
+	SELECT 
+		slr, 
+		array_agg(return_period order by return_period asc) as return_period, 
+		array_agg(expected_loss_restored order by return_period asc) as expected_loss_restored,
+		array_agg(expected_loss_existing order by return_period asc) as expected_loss_existing
+	FROM
+	(
+		SELECT 
+			slr, 
+			return_period, 
+			SUM(expected_loss_restored)::numeric as expected_loss_restored,
+			SUM(expected_loss_existing)::numeric as expected_loss_existing,
+			SUM(expected_benefit)::numeric as expected_benefit
+		FROM nsi_with_expected_damages_unweighted nsi
+		WHERE NOT EXISTS (SELECT 1 FROM all_sites WHERE ST_Contains(all_sites.geom,  nsi.geom) LIMIT 1)
+		GROUP BY 1,2
+	)q
+	GROUP BY 1
+)q

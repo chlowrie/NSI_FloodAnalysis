@@ -22,7 +22,8 @@ AS $$
 		xdata = years,
 		ydata = damages,
 		p0 = [10,10],
-		bounds=(-np.inf, np.inf)
+		bounds=(-np.inf, np.inf),
+        maxfev=5000
 	)
 	
 	a, b = parameters
