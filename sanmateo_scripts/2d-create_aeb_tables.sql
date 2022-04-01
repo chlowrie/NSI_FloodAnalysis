@@ -49,13 +49,14 @@ FROM
                     slr,
                     return_period
                 FROM
-                    nsi_applied_ddf
+                    nsi_applied_ddf nsi
                 WHERE
                     -- bddf_id = 0 corresponds to 'not flooded' under that scenario
                     -- This is the only case where a building can have two bddf_ids (if one of them is zero).
                     -- If there are two nonzero bddf_id values, you've made a mistake in running FAST
                     -- Likely by running with CoastalA in some scenarios, CoastalV in others.
                     bddf_id != 0
+                    AND NOT EXISTS (SELECT 1 FROM all_sites sites WHERE ST_Intersects(nsi.geom, sites.geom) LIMIT 1)
             ) q
         GROUP BY
             1,
@@ -116,6 +117,7 @@ FROM
                     nsi_applied_ddf
                 WHERE
                     bddf_id != 0
+                    AND NOT EXISTS (SELECT 1 FROM all_sites sites WHERE ST_Intersects(nsi.geom, sites.geom) LIMIT 1)
             ) q
         GROUP BY
             1,
@@ -178,6 +180,7 @@ FROM
                 WHERE
                     -- bddf_id = 0 corresponds to 'not flooded' under that scenario
                     bddf_id != 0
+                    AND NOT EXISTS (SELECT 1 FROM all_sites sites WHERE ST_Intersects(nsi.geom, sites.geom) LIMIT 1)
             ) q
         GROUP BY
             1,

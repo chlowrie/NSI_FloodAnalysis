@@ -13,8 +13,8 @@ sudo apt-get update
 
 # Install the latest version of PostgreSQL.
 # If you want a specific version, use 'postgresql-12' or similar instead of 'postgresql':
-sudo apt-get -y install postgresql-14 postgresql-14-postgis-3
-sudo apt-get -y install postgresql-plpython3-14
+sudo apt-get -y install postgresql-13 postgresql-13-postgis-3
+sudo apt-get -y install postgresql-plpython3-13
 
 # Start PostgreSQL.
 sudo service postgresql start
@@ -36,3 +36,6 @@ sudo -u postgres psql -c "
 
 "
 
+sudo -u postgres psql -c "
+	CREATE EXTENSION postgis;
+"

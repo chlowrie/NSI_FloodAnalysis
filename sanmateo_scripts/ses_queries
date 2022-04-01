@@ -1,0 +1,90 @@
+SELECT 
+	slr,
+	vuln,
+	pop,
+	SUM(pop * flooded_cnt_existing / bldg_cnt / return_period) as existing_aepfl,
+	SUM(pop * flooded_cnt_restored / bldg_cnt / return_period) as restored_aepfl,
+	SUM(pop * flooded_cnt_existing / bldg_cnt / return_period) -
+		SUM(pop * flooded_cnt_restored / bldg_cnt / return_period) as pop_protected,
+	geom
+FROM
+(
+SELECT 
+	slr,
+	return_period,
+	communit_8 as vuln,
+	communit_9 as pop,
+	count(*) as bldg_cnt,
+	count(*) filter (where bddf_id != 0 and restoration_status = 'existing') as flooded_cnt_existing,
+	count(*) filter (where bddf_id != 0 and restoration_status = 'restored') as flooded_cnt_restored,
+	ST_SetSRID(bcdc.geom, 4326) as geom
+FROM 
+	nsi_applied_ddf nsi,
+	bcdc_community_vulnerability bcdc
+WHERE 
+	ST_Intersects(nsi.geom, ST_SetSRID(bcdc.geom, 4326))
+	AND NOT EXISTS (SELECT 1 FROM all_sites sites WHERE ST_Intersects(sites.geom, nsi.geom))
+	AND occ LIKE '%RES%'
+group by 1,2,3,4,8
+)q
+WHERE flooded_cnt_restored + flooded_cnt_existing > 0
+	AND flooded_cnt_restored != flooded_cnt_existing
+	AND slr = 0.5
+GROUP BY 1,2,3,7
+ORDER BY 6 ASC;
+
+
+SELECT 
+	*
+FROM
+(
+SELECT 
+	slr,
+	communit_8 as vuln,
+-- 	ST_SetSRID(bcdc.geom, 4326) as geom,
+	sum(aeb) as total_aeb
+FROM 
+	nsi_with_aeb nsi,
+	bcdc_community_vulnerability bcdc
+WHERE 
+	ST_Intersects(nsi.geom, ST_SetSRID(bcdc.geom, 4326))
+	AND NOT EXISTS (SELECT 1 FROM all_sites sites WHERE ST_Intersects(sites.geom, nsi.geom))
+	AND communit_8 != 'Not Calculated'
+GROUP BY 1,2
+)q
+WHERE total_aeb < -1000
+	AND slr = 0.5
+ORDER BY 1,2;
+
+
+SELECT 
+	*, 
+	(expected_loss_existing - expected_loss_restored)::numeric::money
+FROM
+(
+SELECT 
+	slr,
+	communit_8 as vuln,
+	return_period,
+-- 	ST_SetSRID(bcdc.geom, 4326) as geom,
+	SUM(
+		CASE
+			WHEN restoration_status = 'existing' THEN 1
+			ELSE 0
+		END * (bldg_loss_usd + content_loss_usd + inv_loss_usd) / return_period 
+	) as expected_loss_existing,
+	SUM(
+		CASE
+			WHEN restoration_status = 'restored' THEN 1
+			ELSE 0
+		END * (bldg_loss_usd + content_loss_usd + inv_loss_usd) / return_period
+	) as expected_loss_restored
+FROM 
+	nsi_applied_ddf nsi,
+	bcdc_community_vulnerability bcdc
+WHERE 
+	ST_Intersects(nsi.geom, ST_SetSRID(bcdc.geom, 4326))
+	AND NOT EXISTS (SELECT 1 FROM all_sites sites WHERE ST_Intersects(sites.geom, nsi.geom))
+	AND communit_8 != 'Not Calculated'
+GROUP BY 1,2,3
+)q
